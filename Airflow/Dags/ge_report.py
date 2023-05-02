@@ -1,17 +1,21 @@
 import os
-import boto3
-from pathlib import Path
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from pathlib import Path
+
+import boto3
 import snowflake.connector
-from airflow import DAG
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.operators.python_operator import PythonOperator
-from great_expectations_provider.operators.great_expectations import GreatExpectationsOperator
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from dotenv import load_dotenv
 from great_expectations.data_context.types.base import (
+    CheckpointConfig,
     DataContextConfig,
-    CheckpointConfig
 )
+from great_expectations_provider.operators.great_expectations import (
+    GreatExpectationsOperator,
+)
+
+from airflow import DAG
 
 load_dotenv()
 
@@ -37,46 +41,52 @@ conn = snowflake.connector.connect(
 )
 
 base_path = "/opt/airflow/working_data"
-#base_path = Path(__file__).parents[1]
+# base_path = Path(__file__).parents[1]
 ge_root_dir = os.path.join(base_path, "great_expectations")
 data_file = os.path.join(base_path, "data/issue.csv")
 default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=1),
+    "owner": "airflow",
+    "depends_on_past": False,
+    "email_on_failure": False,
+    "email_on_retry": False,
+    "retries": 1,
+    "retry_delay": timedelta(minutes=1),
 }
 
 dag = DAG(
-    'github_issues_dag',
+    "github_issues_dag",
     default_args=default_args,
-    description='Transcribe all audio files daily and move them to the appropriate folders',
-    schedule_interval='0 0 * * *',
+    description="Transcribe all audio files daily and move them to the appropriate folders",
+    schedule_interval="0 0 * * *",
     start_date=datetime(2023, 4, 11),
-    catchup=False
+    catchup=False,
 )
 
 import pandas as pd
+
+
 def extract_github_issues():
     cursor = conn.cursor()
-    cursor.execute('SELECT ID, ISSUE_URL,REPO_OWNER,REPO_NAME,ISSUE_NUMBER,CREATED_BY,TITLE,BODY,STATE,UPDATED_AT FROM GITHUB_ISSUES.PUBLIC.ISSUES')
+    cursor.execute(
+        "SELECT ID, ISSUE_URL,REPO_OWNER,REPO_NAME,ISSUE_NUMBER,CREATED_BY,TITLE,BODY,STATE,UPDATED_AT FROM GITHUB_ISSUES.PUBLIC.ISSUES"
+    )
     cols = [col[0] for col in cursor.description]
     results = pd.DataFrame(cursor.fetchall(), columns=cols)
-    
+
     # Close Snowflake connection
     cursor.close()
     conn.close()
-    
+
     # Save results to CSV file
-    results.to_csv('/opt/airflow/working_data/data/issues.csv', index=False)
-    
+    results.to_csv("/opt/airflow/working_data/data/issues.csv", index=False)
+
     return None
 
-file_path = '/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site/index.html'
-s3_bucket = 'damg1234'
-s3_key = 'great_expectations/report.html'
+
+file_path = "/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site/index.html"
+s3_bucket = "damg1234"
+s3_key = "great_expectations/report.html"
+
 
 def upload_to_s3():
     """
@@ -90,10 +100,10 @@ def upload_to_s3():
     Returns:
     str: A message indicating if the file was uploaded successfully or if an error occurred.
     """
-    AWS_ACCESS_KEY = os.environ.get('AWS_ACCESS_KEY')
-    AWS_SECRET_KEY = os.environ.get('AWS_SECRET_KEY')
-    AWS_REGION = os.environ.get('AWS_REGION')
-    
+    AWS_ACCESS_KEY = os.environ.get("AWS_ACCESS_KEY")
+    AWS_SECRET_KEY = os.environ.get("AWS_SECRET_KEY")
+    AWS_REGION = os.environ.get("AWS_REGION")
+
     s3 = boto3.client(
         "s3",
         aws_access_key_id=AWS_ACCESS_KEY,
@@ -102,30 +112,36 @@ def upload_to_s3():
     )
 
     # Upload the contents of the data_docs folder to the S3 bucket
-    for root, dirs, files in os.walk('/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site'):
+    for root, dirs, files in os.walk(
+        "/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site"
+    ):
         for file in files:
             local_file_path = os.path.join(root, file)
-            s3_key = os.path.relpath(local_file_path, '/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site')
+            s3_key = os.path.relpath(
+                local_file_path,
+                "/opt/airflow/working_data/great_expectations/uncommitted/data_docs/local_site",
+            )
             s3.upload_file(local_file_path, s3_bucket, s3_key)
-    
+
+
 extract_issues_task = PythonOperator(
-    task_id='extract_issues',
-    python_callable=extract_github_issues,
-    dag=dag
+    task_id="extract_issues", python_callable=extract_github_issues, dag=dag
 )
 
 ge_data_context_root_dir_with_checkpoint_name_pass = GreatExpectationsOperator(
     task_id="ge_data_context_root_dir_with_checkpoint_name_pass",
     data_context_root_dir=ge_root_dir,
     checkpoint_name="github_issues_checkpoint_v1",
-    fail_task_on_validation_failure=False
+    fail_task_on_validation_failure=False,
 )
 
 upload_ge_report_task = PythonOperator(
-    task_id='upload_ge_report',
-    python_callable=upload_to_s3,
-    dag=dag
+    task_id="upload_ge_report", python_callable=upload_to_s3, dag=dag
 )
 
-#Flow
-extract_issues_task >> ge_data_context_root_dir_with_checkpoint_name_pass >> upload_ge_report_task
+# Flow
+(
+    extract_issues_task
+    >> ge_data_context_root_dir_with_checkpoint_name_pass
+    >> upload_ge_report_task
+)

@@ -1,7 +1,8 @@
+import os
 from unittest.mock import MagicMock
+
 import pytest
 import requests_mock
-import os
 import snowflake.connector
 
 from utils.core_helpers import (
@@ -16,6 +17,7 @@ SNOWFLAKE_PASSWORD = os.environ.get("SNOWFLAKE_PASSWORD")
 SNOWFLAKE_DATABASE = os.environ.get("SNOWFLAKE_DATABASE")
 SNOWFLAKE_SCHEMA = os.environ.get("SNOWFLAKE_SCHEMA")
 SNOWFLAKE_WAREHOUSE = os.environ.get("SNOWFLAKE_WAREHOUSE")
+
 
 def test_get_open_issues_success():
     owner = "test_owner"
@@ -80,6 +82,7 @@ def test_get_open_issues_invalid_token():
         result = get_open_issues(owner, repo, access_token, page, per_page)
         assert result == []
 
+
 def test_get_unique_owner_repo_pairs_success():
     mock_session = MagicMock()
     mock_result = MagicMock()
@@ -101,6 +104,7 @@ def test_get_unique_owner_repo_pairs_success():
         ("owner2", "repo2"),
         ("owner3", "repo3"),
     ]
+
 
 def test_get_unique_owner_repo_pairs_empty_result():
     mock_session = MagicMock()
@@ -153,14 +157,15 @@ def test_get_issue_comments_invalid_token():
         result = get_issue_comments(issue_url, access_token)
         assert result == []
 
+
 def get_issue_url(issue_number, repo_owner=None, repo_name=None):
     conn = snowflake.connector.connect(
-    user=SNOWFLAKE_USER,
-    password=SNOWFLAKE_PASSWORD,
-    account=SNOWFLAKE_ACCOUNT,
-    warehouse=SNOWFLAKE_WAREHOUSE,
-    database=SNOWFLAKE_DATABASE,
-    schema=SNOWFLAKE_SCHEMA,
+        user=SNOWFLAKE_USER,
+        password=SNOWFLAKE_PASSWORD,
+        account=SNOWFLAKE_ACCOUNT,
+        warehouse=SNOWFLAKE_WAREHOUSE,
+        database=SNOWFLAKE_DATABASE,
+        schema=SNOWFLAKE_SCHEMA,
     )
     cursor = conn.cursor()
     query = f"SELECT ISSUE_URL, TITLE FROM GITHUB_ISSUES.PUBLIC.ISSUES WHERE ID = '{issue_number}'"
@@ -169,6 +174,7 @@ def get_issue_url(issue_number, repo_owner=None, repo_name=None):
     cursor.close()
     conn.close()
     return (row[0], row[1]) if row else (None, None)
+
 
 # Test data setup
 test_data = [
@@ -187,13 +193,14 @@ test_data = [
         "title": 'Sound of video from "For You" tab plays after switching to "Following" tab in Twitter Android app',
     },
     {
-    "issue_number": 1665279685,
-    "repo_owner": "facebook",
-    "repo_name": "Rapid",
-    "issue_url": "https://github.com/facebook/Rapid/issues/914",
-    "title": "Selecting multiple alike elements, suddenly dissapear",
+        "issue_number": 1665279685,
+        "repo_owner": "facebook",
+        "repo_name": "Rapid",
+        "issue_url": "https://github.com/facebook/Rapid/issues/914",
+        "title": "Selecting multiple alike elements, suddenly dissapear",
     },
 ]
+
 
 # Define the test function
 @pytest.mark.parametrize(
@@ -209,6 +216,7 @@ def test_get_issue_url(test_data_item):
     issue_url, title = get_issue_url(test_data_item["issue_number"])
     assert issue_url == test_data_item["issue_url"]
     assert title == test_data_item["title"]
+
 
 # Test with non-existent issue number
 def test_get_issue_url_non_existent():

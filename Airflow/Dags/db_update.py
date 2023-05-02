@@ -1,12 +1,13 @@
 import os
 import sqlite3
+from datetime import timedelta
 
 import boto3
-from airflow import DAG
+import snowflake.connector
 from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
-from datetime import timedelta
-import snowflake.connector
+
+from airflow import DAG
 
 default_args = {
     "owner": "airflow",
@@ -19,7 +20,7 @@ default_args = {
 dag = DAG(
     "update_api_calls",
     default_args=default_args,
-    schedule_interval='0 * * * *', #runs every hour
+    schedule_interval="0 * * * *",  # runs every hour
     catchup=False,
 )
 
@@ -41,8 +42,8 @@ conn = snowflake.connector.connect(
     table=SNOWFLAKE_USER_TABLE,
 )
 
+
 def update_api_calls():
-    
     cursor = conn.cursor()
     query = """
         UPDATE APP_USERS SET calls_remaining =
@@ -57,6 +58,7 @@ def update_api_calls():
     conn.commit()
     cursor.close()
     conn.close()
+
 
 run_this = PythonOperator(
     task_id="update_api_calls",
